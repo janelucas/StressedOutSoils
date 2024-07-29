@@ -16,8 +16,6 @@ library(dplyr); packageVersion("dplyr")
 library(ggpubr); packageVersion("ggpubr")
 ```
 
-let's run it back... with fungi this time
-
 ```{r}
 
 # Define the sample name mapping
@@ -179,8 +177,6 @@ alphD_euk1 + geom_boxplot(data=alphD_euk1$data, aes(x=Group, fill=Group)) + stat
 alphD_euk2 <- plot_richness(physeq_euk_scaled, "Disturbances", measures = alpha_meas)
 alphD_euk2 + geom_boxplot(data=alphD_euk2$data, aes(x=Disturbances, group = Disturbances)) 
 
-#cannot get stat_compare_means() to function. I am not sure of the problem, but I think I am going to need to test for signficance elsewhere
-
 ```
 
 ```{r}
@@ -194,7 +190,7 @@ alpha_fung_meta <- merge(alpha_fung, metadata) #when I do this two rows of data 
 #this problem is emminently solvable, I will make an edit to the metadata file
 
 
-#may be worth looking into how richness is calculated for this dataset-- specifically, at what level of taxonomic classification it is calculated. I think the answer might be that it's calculated across levels. Based on the way the data is currently structured, that may be appropriate, but I need to think a little moe about it to be sure
+#may be worth looking into how richness is calculated for this dataset-- specifically, at what level of taxonomic classification it is calculated. I think the answer might be that it's calculated across levels. Based on the way the data is currently structured, that may be appropriate, but I need to think a little more about it to be sure
 ```
 
 https://meera.seas.umich.edu/power-analysis-statistical-significance-effect-size.html
@@ -513,8 +509,6 @@ pcoa_plot <- plot_ordination(physeq_euk_scaled, euk_pcoa, color="Group")
 p7 #+ geom_polygon(aes(fill=Group)) + facet_wrap(~Group)
 
 #to add a disturbance shape I need to turn disturbances into a character
-
-
 
 
 ```
