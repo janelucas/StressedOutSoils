@@ -1,0 +1,527 @@
+---
+title: "fungi"
+author: "Hannah Monti"
+date: "2024-07-17"
+output: html_document
+---
+
+```{r}
+#load required packages
+library(tidyr); packageVersion("tidyr")
+library(phyloseq); packageVersion("phyloseq")
+library(ggplot2); packageVersion("ggplot2")
+library(readr); packageVersion("readr")
+library(vegan); packageVersion("vegan")
+library(dplyr); packageVersion("dplyr")
+library(ggpubr); packageVersion("ggpubr")
+```
+
+let's run it back... with fungi this time
+
+```{r}
+
+# Define the sample name mapping
+sample_name_mapping <- c(
+  "Sample #1" = "49_S49",
+  "Sample #2" = "S10_S10",
+  "Sample #3" = "S11_S11",
+  "Sample #4" = "S12_S12",
+  "Sample #5" = "S13_S13",
+  "Sample #6" = "S14_S14",
+  "Sample #7" = "S15_S15",
+  "Sample #8" = "S16_S16",
+  "Sample #9" = "S17_S17",
+  "Sample #10" = "S18_S18",
+  "Sample #11" = "S19_S19",
+  "Sample #12" = "S1_S1",
+  "Sample #13" = "S20_S20",
+  "Sample #14" = "S21_S21",
+  "Sample #15" = "S22_S22",
+  "Sample #16" = "S23_S23",
+  "Sample #17" = "S24_S24",
+  "Sample #18" = "S25_S25",
+  "Sample #19" = "S26_S26",
+  "Sample #20" = "S27_S27",
+  "Sample #21" = "S28_S28",
+  "Sample #22" = "S29_S29",
+  "Sample #23" = "S2_S2",
+  "Sample #24" = "S30_S30",
+  "Sample #25" = "S31_S31",
+  "Sample #26" = "S32_S32",
+  "Sample #27" = "S33_S33",
+  "Sample #28" = "S34_S34",
+  "Sample #29" = "S35_S35",
+  "Sample #30" = "S36_S36",
+  "Sample #31" = "S37-2_S77",
+  "Sample #32" = "S37_S37",
+  "Sample #33" = "S38_S38",
+  "Sample #34" = "S39_S39",
+  "Sample #35" = "S3_S3",
+  "Sample #36" = "S40_S40",
+  "Sample #37" = "S41_S41",
+  "Sample #38" = "S42_S42",
+  "Sample #39" = "S43_S43",
+  "Sample #40" = "S44_S44",
+  "Sample #41" = "S45_S45",
+  "Sample #42" = "S46_S46",
+  "Sample #43" = "S47_S47",
+  "Sample #44" = "S48_S48",
+  "Sample #45" = "S4_S4",
+  "Sample #46" = "S50_S50",
+  "Sample #47" = "S51_S51",
+  "Sample #48" = "S54_S52",
+  "Sample #49" = "S55_S53",
+  "Sample #50" = "S56_S54",
+  "Sample #51" = "S57_S55",
+  "Sample #52" = "S58_S56",
+  "Sample #53" = "S59_S57",
+  "Sample #54" = "S5_S5",
+  "Sample #55" = "S60_S58",
+  "Sample #56" = "S61_S59",
+  "Sample #57" = "S62_S60",
+  "Sample #58" = "S63_S61",
+  "Sample #59" = "S64_S62",
+  "Sample #60" = "S65_S63",
+  "Sample #61" = "S67_S64",
+  "Sample #62" = "S68_S65",
+  "Sample #63" = "S69_S66",
+  "Sample #64" = "S6_S6",
+  "Sample #65" = "S70_S67",
+  "Sample #66" = "S71_S68",
+  "Sample #67" = "S72_S69",
+  "Sample #68" = "S73_S70",
+  "Sample #69" = "S74_S71",
+  "Sample #70" = "S75_S72",
+  "Sample #71" = "S76_S73",
+  "Sample #72" = "S77_S74",
+  "Sample #73" = "S78_S75",
+  "Sample #74" = "S7_S7",
+  "Sample #75" = "S80_S76",
+  "Sample #76" = "S8_S8",
+  "Sample #77" = "S9_S9"
+)
+
+# Read the abundance table
+abundance_data <- read_delim("combined_abundance_table_recent.txt", delim = "\t") #likely kraken or bracken output
+
+# Rename the sample columns in the abundance data
+colnames(abundance_data)[2:ncol(abundance_data)] <- sample_name_mapping[colnames(abundance_data)[2:ncol(abundance_data)]]
+
+# Extract taxonomy and abundance data
+taxonomy <- abundance_data$'#Classification'
+abundance <- abundance_data[, -1]
+rownames(abundance) = taxonomy
+
+# Create an OTU table
+otu_table <- otu_table(as.matrix(abundance), taxa_are_rows = TRUE)
+filtered_rows <- grepl("d__", rownames(otu_table)) #filtering at domain level doesn't remove anything, can edit to a lower level of classification
+filtered_otu_table <- otu_table[filtered_rows, ]
+# Create a taxonomy table (dummy table with only one column)
+taxonomy_table <- data.frame(Taxon = taxonomy)
+
+#splitting string in taxonomy table into levels of organization
+tax_table_separate <- separate(taxonomy_table, Taxon, into = c("Domain", "Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"), sep = "\\|", fill = "right")
+
+#finishing generation of the taxonomy table
+rownames(tax_table_separate) <- taxonomy
+tax_table <- tax_table(as.matrix(tax_table_separate))
+
+filtered_rows <- grepl("d__", rownames(tax_table)) #this filtering step doesn't actually do anything, because everything included in the original table is classified at the domain level. Prior to this step, we are losing unclassified reads... somewhere
+filtered_tax_table <- tax_table[filtered_rows, ]
+metadata <- read.csv("metagenome_sample_info.csv", row.names=1)
+
+# Convert sample data to a sample_data object
+sample_data_ps <- sample_data(metadata)
+
+#generate phyloseq object containing tax_table, otu_table, and sample_data
+physeq <- phyloseq(filtered_otu_table, filtered_tax_table, sample_data_ps)
+
+#subsetting phyloseq object that contains everything in domain eukarya (virtually synonymous with fungi-- capture a few diatom and quite a few human sequences, as well)
+physeq_euk= subset_taxa(physeq, Domain == "d__Eukaryota")
+#subsetting phyloseq object that contains everything NOT in domain eukarya (mostly bacteria, some archaea, some virus)
+physeq_prok = subset_taxa(physeq, Domain != "d__Eukaryota")
+
+
+#the remainder of this file will manipulate only the eukaryotic data
+```
+
+```{r}
+#rarefaction step
+#randomly removes samples from more intensively samples sites until all sites have the same (lowest) sampling effort
+physeq_euk_scaled <- rarefy_even_depth(physeq_euk, sample.size = min(sample_sums(physeq_euk)), replace = FALSE, rngseed = 1) 
+
+#1150 OTUs removed when COMBINED_ABUNDANCE_TABLE_RECENT is rarefied 
+
+
+```
+
+```{r}
+#subset phyloseq object to contain only univariate treatment groups
+euk_uni <- subset_samples(physeq_euk_scaled, Group %in% c("W", "D", "C", "F", "B"))
+
+#define alpha diversity metrics to be calculated
+alpha_meas = c("Observed", "Shannon", "Simpson") 
+#define comparisons for wilcoxon rank sum test
+comp_euk = list(c("C", "W"), c("C", "D"),c("C", "B"),c("C", "F"))
+#define variable order on x axis
+euk_order = c("C", "W", "D", "B", "F")
+
+#calculate and plot measures of alpha diversity for data grouped by disturbance identity
+alphD_euk1 <- plot_richness(euk_uni, "Group", measures = alpha_meas)
+alphD_euk1 + geom_boxplot(data=alphD_euk1$data, aes(x=Group, fill=Group)) + stat_compare_means(comparisons = comp_euk) + scale_x_discrete(limits=euk_order)
+
+#something to consider: do I want to make a version of this plot that is grouped such that everything that has a W in it is included in W? I think so, but I think that should be low on my list of priorities
+
+```
+
+```{r}
+#calculating and plotting alpha diversity measures for data grouped by number of disturbances
+alphD_euk2 <- plot_richness(physeq_euk_scaled, "Disturbances", measures = alpha_meas)
+alphD_euk2 + geom_boxplot(data=alphD_euk2$data, aes(x=Disturbances, group = Disturbances)) 
+
+#cannot get stat_compare_means() to function. I am not sure of the problem, but I think I am going to need to test for signficance elsewhere
+
+```
+
+```{r}
+#estimating three measures of alpha diversity and saving to dataframe
+alpha_fung <- estimate_richness(physeq_euk_scaled, measures = alpha_meas)
+
+#merging the diversity data with the metadata for ease of grouping later on
+alpha_fung$site <- rownames(alpha_fung) 
+metadata$site <- rownames(metadata)
+alpha_fung_meta <- merge(alpha_fung, metadata) #when I do this two rows of data are lost because the site names are recorded slightly differently (X49_S49 is just 49_S49 and the weird one swaps a period for a dash)
+#this problem is emminently solvable, I will make an edit to the metadata file
+
+
+#may be worth looking into how richness is calculated for this dataset-- specifically, at what level of taxonomic classification it is calculated. I think the answer might be that it's calculated across levels. Based on the way the data is currently structured, that may be appropriate, but I need to think a little moe about it to be sure
+```
+
+https://meera.seas.umich.edu/power-analysis-statistical-significance-effect-size.html
+
+```{r}
+#calculating evenness from shannon diversity and saving to new column
+alpha_fung_meta <- alpha_fung_meta %>%
+  mutate(evenness = Shannon/log(Observed))
+
+#taking the mean and standard deviation of each diversity measure for each treatment, saving to new dataframe
+mean_sd_fung_alpha <- alpha_fung_meta %>%
+  group_by(Group) %>%
+  summarise(mean_shan = mean(Shannon), sd_shan = sd(Shannon), mean_simp = mean(Simpson), sd_simp = sd(Simpson), mean_ob = mean(Observed), sd_ob = sd(Observed), mean_even = mean(evenness), sd_even = sd(evenness))
+
+```
+
+```{r}
+#generating dataframe for univariate figure
+#treating the true control as the control
+#calculating effect size (cohen's d) for each univariate treatment on shannon diversity and richness
+univariate_euk <- mean_sd_fung_alpha %>%
+  filter(Group %in% c("C", "B", "D", "W", "F")) %>% 
+  mutate(ES_shan = (round(mean_shan, 6) - 3.385871)/0.18939466) %>% 
+  mutate(ES_ob = (round(mean_ob, 2) - 4468.20)/196.4604)
+
+#defining order of variables for x axis of figure
+univariate_order <- c("C", "B", "F", "W", "D") 
+
+#plotting effect on richness
+univariate_euk_plot_ob <- ggplot(data = univariate_euk, aes(x=Group, y=ES_ob))+
+  geom_col()+
+  scale_x_discrete(limits=univariate_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Single Factor Treatments: Effect on Richness-- Eukaryotes")
+
+#plotting effect on shannon diversity 
+univariate_euk_plot_shan <- ggplot(data = univariate_euk, aes(x=Group, y=ES_shan))+
+  geom_col()+
+  scale_x_discrete(limits=univariate_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Single Factor Treatments: Effect on Shannon Diversity-- Eukaryotes")
+
+```
+
+
+```{r}
+#same as above
+#treating fungicide as the "control" for calculating effect size
+#including effect on evenness as third graph 
+
+fungicide <- mean_sd_fung_alpha %>%
+  filter(Group %in% c("F", "BF", "DF", "WF", "DBF", "WBF", "WDF", "WDFB")) %>%
+  mutate(ES_shan = (round(mean_shan, 6) - 3.350391)/0.09381561) %>%
+  mutate(ES_ob = (round(mean_ob, 2) - 4510.40)/269.3711) %>%
+  mutate(ES_even = (round(mean_even, 7)-0.3982299)/0.009620179)
+
+fungicide_order <- c("F", "BF", "DF", "WF", "DBF", "WBF", "WDF", "WDFB")
+
+fungicide_ES_plot_shan <- ggplot(data = fungicide, aes(x=Group, y=ES_shan))+
+  geom_col()+
+  scale_x_discrete(limits=fungicide_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Fungicide: Effect on Shannon Diversity-- Eukaryotes")
+
+fungicide_ES_plot_ob <- ggplot(data = fungicide, aes(x=Group, y=ES_ob))+
+  geom_col()+
+  scale_x_discrete(limits=fungicide_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Fungicide: Effect on Richness-- Eukaryotes")
+
+fungicide_ES_plot_even <- ggplot(data = fungicide, aes(x=Group, y=ES_even))+
+  geom_col()+
+  scale_x_discrete(limits=fungicide_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Fungicide: Effect on Evenness-- Eukaryotes")
+
+fungicide_ES_plot_ob
+fungicide_ES_plot_shan
+fungicide_ES_plot_even
+
+
+```
+
+```{r}
+#same as above
+#treating bactericide as the "control" for calculating effect size
+
+antibac <- mean_sd_fung_alpha %>%
+  filter(Group %in% c("B", "BF", "WB", "DB", "DBF", "WBF", "WDB", "WDFB")) %>%
+  mutate(ES_shan = (round(mean_shan, 6) - 3.231448)/0.41373512) %>%
+  mutate(ES_ob = (round(mean_ob, 2) - 4398.40)/408.0384)
+
+antibac_order <- c("B", "BF", "DB", "WB", "DBF", "WBF", "WDB", "WDFB")
+
+antibac_ES_plot_shan <- ggplot(data = antibac, aes(x=Group, y=ES_shan))+
+  geom_col()+
+  scale_x_discrete(limits=antibac_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Antibacterial: Effect on Shannon Diversity-- Eukaryotes")
+
+antibac_ES_plot_ob <- ggplot(data = antibac, aes(x=Group, y=ES_ob))+
+  geom_col()+
+  scale_x_discrete(limits=antibac_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Antibacterial: Effect on Richness-- Eukaryotes")
+
+antibac_ES_plot_ob
+antibac_ES_plot_shan
+
+```
+
+```{r}
+#same as above
+#treating drought as the "control" for calculating effect size
+
+drought <- mean_sd_fung_alpha %>%
+  filter(Group %in% c("D", "DF", "WD", "DB", "DBF", "WDF", "WDB", "WDFB")) %>%
+  mutate(ES_shan = (round(mean_shan, 6) - 3.175282)/0.20898660) %>%
+  mutate(ES_ob = (round(mean_ob, 2) - 4426.40)/289.4405)
+
+drought_order <- c("D", "DF", "WD", "DB", "DBF", "WDF", "WDB", "WDFB")
+
+drought_ES_plot_shan <- ggplot(data = drought, aes(x=Group, y=ES_shan))+
+  geom_col()+
+  scale_x_discrete(limits=drought_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Drought: Effect on Shannon Diversity-- Eukaryotes")
+
+drought_ES_plot_ob <- ggplot(data = drought, aes(x=Group, y=ES_ob))+
+  geom_col()+
+  scale_x_discrete(limits=drought_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Drought: Effect on Richness-- Eukaryotes")
+
+drought_ES_plot_ob
+drought_ES_plot_shan
+
+```
+
+```{r}
+#same as above
+#treating warming as the "control" for calculating effect size
+
+warming <- mean_sd_fung_alpha %>%
+  filter(Group %in% c("W", "WF", "WD", "WB", "WBF", "WDF", "WDB", "WDFB")) %>%
+  mutate(ES_shan = (round(mean_shan, 6) - 3.276052)/0.48138621) %>%
+  mutate(ES_ob = (round(mean_ob, 2) - 4352.00)/584.8286)
+
+warming_order <- c("W", "WF", "WD", "WB", "WBF", "WDF", "WDB", "WDFB")
+
+warming_ES_plot_shan <- ggplot(data = warming, aes(x=Group, y=ES_shan))+
+  geom_col()+
+  scale_x_discrete(limits=warming_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Warming: Effect on Shannon Diversity-- Eukaryotes")
+
+warming_ES_plot_ob <- ggplot(data = warming, aes(x=Group, y=ES_ob))+
+  geom_col()+
+  scale_x_discrete(limits=warming_order)+
+  geom_hline(yintercept=0, color="red", linetype="dotted")+
+  labs(y="Effect Size (cohen's d)", x= "Treatment", title = "Warming: Effect on Richness-- Eukaryotes")
+
+#effect sizes are like a p-value, I don't think it makes sense to test for significance among them. Rather, they are scored to tell whether the effect is large or not (and whether we should care or not lol)
+
+warming_ES_plot_ob
+warming_ES_plot_shan
+
+```
+
+```{r}
+#testing for significant differences between shannon diversity of treatment groups (based on identity not number of treatments)
+wilcox <- pairwise.wilcox.test(alpha_fung_meta$Shannon, alpha_fung_meta$Group,
+                 p.adjust.method = "none") #can include BH or Bonferroni correction, likely more appropriate
+
+print(wilcox) #view matrix of results
+
+```
+```{r}
+set.seed(1)
+
+#reverting metadata for eukaryotes to dataframe 
+euk_metadata <- as(sample_data(physeq_euk_scaled), "data.frame")
+#calculating bray-curtis dissimilarity for eukaryotic data
+euk_dist_matrix <- phyloseq::distance(physeq_euk_scaled, method ="bray")
+#conducting permanova on bray-curtis distance matrix, grouping based on treatment identity (not number of treatments)
+perma_euk <- vegan::adonis2(euk_dist_matrix ~ Group, data = euk_metadata)
+
+#conduct permdisp test
+permd_euk <- betadisper(euk_dist_matrix, euk_metadata$Group, type="centroid")
+#test for significance pairwise (I think the test performed on each pair is tukeyHSD, but not sure)
+permutest_object_euk <- permutest(permd_euk, pairwise = TRUE)
+#pulling out observed and permuted p-values for pairwise significance tests
+observed_euk <- as.data.frame(permutest_object_euk$pairwise$observed)
+permuted_euk <- as.data.frame(permutest_object_euk$pairwise$permuted)
+
+```
+
+```{r}
+#repeating permdisp, but grouping based on number of treatments rather than identity
+permd_factors_euk <- betadisper(euk_dist_matrix, euk_metadata$Disturbances, type="centroid")
+
+```
+
+```{r}
+#pulling out disperion (and metadata) calculated by permdisp analysis on treatment groups 
+euk_distances <- as.data.frame(permd_euk$distances)
+euk_groups <- as.data.frame(permd_euk$group)
+
+#pulling out disperion (and metadata) calculated by permdisp analysis on number of treatments
+euk_distances_factors <- as.data.frame(permd_factors_euk$distances)
+euk_groups_factors <- as.data.frame(permd_factors_euk$group)
+
+#recombining dispersion data and metadate
+euk_dist_data <- cbind(euk_distances, "groups" = euk_groups[, 1])
+euk_data_factors <- cbind(euk_distances_factors, "groups" = euk_groups_factors[,1])
+
+#generating dataframe that contains dispersion data for groups based on both number of treatments and identity of treatments
+colnames(euk_dist_data) <- c("distances", "x")
+colnames(euk_data_factors) <- c("distances", "x")
+euk_data_factors$x <- as.character(euk_data_factors$x)
+euk_disp_whole <- rbind(euk_dist_data, euk_data_factors)
+
+#pulling out only univariate or numbered treatments
+euk_disp_whole <- euk_disp_whole %>%
+  filter(x %in% c("W","F","B","C","D","1","2","3","4"))
+
+#defining x-axis order for figure
+order= c("C", "W", "F", "B", "D", "1", "2", "3", "4")
+
+#plotting dispersion against treatments
+euk_disp_jitter <- ggplot(data=euk_disp_whole, aes(x=x, y=distances)) +  
+  geom_jitter( width=0.2)+
+  stat_summary(color="red")+
+  scale_x_discrete(limits=order) +
+  labs(x="Factors", y="Beta Dispersion")
+
+euk_disp_jitter
+
+```
+
+```{r}
+# repeating the figure above, but instead of putting beta dispersion on the y-axis, I'm putting position on NMDS1
+
+set.seed(1)
+
+#conducting NMDS analysis based on bray-curtis distance matrix
+euk_nmds <- ordinate(physeq_euk_scaled, "NMDS", "bray")
+#output stress, should be less than 0.2
+cat("stress is:", euk_nmds$stress)
+
+#generating dataframe that contains the NMDS1 and NMDS2 values for each site, as well as metadata
+data_scores = as.data.frame(scores(euk_nmds)$site)
+data_scores$site <- rownames(data_scores)
+euk_metadata$site <- rownames(euk_metadata)
+data_scores_meta = merge(data_scores, euk_metadata)
+
+#manipulating dataframe so that data can be grouped and plotted according to both indentity of treatments of number of treatments
+data_scores_meta_long <- data_scores_meta %>%
+  select(NMDS1, NMDS2, Group, Disturbances) %>%
+  mutate(Disturbances = as.character(Disturbances)) %>%
+  pivot_longer(cols = c(Group, Disturbances), names_to = "Kind_of_Factor", values_to = "Factor") %>%
+  filter(Factor %in% c("W","F","B","C","D","1", "2", "3", "4"))
+
+#defining x-axis order for figure
+order= c("C", "W", "F", "B", "D", "1", "2", "3", "4")
+
+#plotting NDMS1 score against treatments
+nmds_jitter <- ggplot(data=data_scores_meta_long, aes(x=Factor, y=NMDS1)) +  
+  geom_jitter( width=0.2)+
+  stat_summary(color="red")+
+  labs(x="Factors", y="Community Composition (NMDS1)") +
+  scale_x_discrete(limits=order)
+
+
+nmds_jitter
+```
+```{r}
+
+#manually calculating richness for each site
+all_fung <- as.data.frame(otu_table(physeq_euk_scaled)) #generating dataframe from otu table
+all_fung$taxa = rownames(all_fung) #turning taxa names into a column to be manipulated
+OTU_counts <- as.data.frame(colSums(all_fung != 0)) #counting rows (taxa) for each site that contain a value other than zero
+OTU_counts$site <- rownames(OTU_counts)
+ 
+#merging richness measure with metadata
+OTU_counts_meta <- merge(OTU_counts, euk_metadata) 
+
+#manipulating dataframe so that data can be grouped and plotted according to both indentity of treatments of number of treatments
+OTU_counts_meta <- OTU_counts_meta %>%
+  mutate(Disturbances = as.character(Disturbances)) %>%
+  pivot_longer(cols = c(Group, Disturbances), names_to = "Kind_of_Factor", values_to = "Factor") %>%
+  filter(Factor %in% c("W","F","B","C","D","1", "2", "3", "4"))
+  
+#plotting richness against treatments
+OTU_jitter <- ggplot(data=OTU_counts_meta, aes(x=Factor, y=`colSums(all_fung != 0)`)) +  
+  geom_jitter( width=0.2)+
+  stat_summary(color="red")+
+  labs(x="Factors", y="OTU Richness") +
+  scale_x_discrete(limits=order)
+
+
+OTU_jitter
+
+#the result of my manual richness calculation is basically the same as the results from the phyloseq function
+
+```
+
+```{r}
+#trying alternative ordination method because the fungal dataset lacks sufficient data for an NMDS
+
+set.seed(1)
+
+euk_pcoa <- ordinate(physeq_euk_scaled, "PCoA", "bray")
+
+pcoa_plot <- plot_ordination(physeq_euk_scaled, euk_pcoa, color="Group") 
+p7 #+ geom_polygon(aes(fill=Group)) + facet_wrap(~Group)
+
+#to add a disturbance shape I need to turn disturbances into a character
+
+
+
+
+```
+
+
+
+
+
+
+
